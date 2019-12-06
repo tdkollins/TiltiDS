@@ -1,4 +1,4 @@
-import gspread
+zimport gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import requests
 import json
@@ -19,6 +19,8 @@ scope = [
 
 camp_list = setup["campaignList"]
 token = setup["token"]
+sheet_name = setup["sheetName"]
+wks_index = setup["wksIndex"]
 creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
 client = gspread.authorize(creds)
 
@@ -67,6 +69,12 @@ def tiltify_request(url, params=None):
     return response
 
 def main():
+    max_duration = 0
+    gc = pygsheets.authorize(service_file='creds.json')
+    sh = gc.open(sheet_name)
+    wks = sh[wks_index]
+    cur_col = 2
+
     for camp in camp_list:
         camp_id = camp["id"]
         camp_url = api_url + "campaigns/" + camp_id
@@ -84,12 +92,22 @@ def main():
 
         dataframe = pandas.DataFrame()
         dataframe["Marathon Time"] = get_hours(duration)
-        # print(dataframe)
 
         donation_url = api_url + "campaigns/" + camp_id + "/donations/"
         donation_data = json.loads(tiltify_request(donation_url, {"count": 1000000}).text)["data"]
         dataframe["Donation Total"] = don_vs_time(start_timestamp, donation_data, len(dataframe))
         print(dataframe)
+
+        time_df = pandas.DataFrame()
+        time_df["Marathon Time"] = dataframe["Marathon Time"]
+        donation_df = pandas.DataFrame()
+        donation_df[camp_name] = dataframe["Donation Total"]
+
+        if duration > max_duration:
+            duration = max_duration
+            wks.set_dataframe(time_df,(1, 1))
+        wks.set_dataframe(donation_df, (1, cur_col))
+        cur_col += 1
 
 
 main()
